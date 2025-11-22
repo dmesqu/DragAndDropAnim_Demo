@@ -13,14 +13,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             DragAndDropAnim_DemoTheme {
 
-                    DragAndDropBoxes()
-
+                //my solution todo2: Show the DragAndDropBoxes composable
+                DragAndDropBoxes()
 
             }
         }
     }
 }
-
 
 
 // This should be completed in a group setting

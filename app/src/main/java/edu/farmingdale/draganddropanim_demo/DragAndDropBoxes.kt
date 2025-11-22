@@ -29,8 +29,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+//my solution todo3: need size to draw a visible rectangle
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Face
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -47,19 +50,19 @@ import androidx.compose.ui.draganddrop.DragAndDropTransferData
 import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-
-//private val rotation = FloatPropKey()
-
 
 @Composable
 fun DragAndDropBoxes(modifier: Modifier = Modifier) {
-    var isPlaying by remember { mutableStateOf(true) }
+    // controls whether the rect is rotating
+    var isPlaying by remember { mutableStateOf(false) }
+    //my solution todo7: track the target offset so we can move the rect horizontally & vertically
+    // start at the center (0,0), and we offset relative to center of the bottom area
+    var targetOffset by remember { mutableStateOf(IntOffset(0, 0)) }
+    //my solution todo6: track rotation direction so drop "up" vs "down" can change animation
+    var rotationDirection by remember { mutableStateOf(1f) }
     Column(modifier = Modifier.fillMaxSize()) {
-
         Row(
             modifier = modifier
                 .fillMaxWidth()
@@ -69,7 +72,6 @@ fun DragAndDropBoxes(modifier: Modifier = Modifier) {
             var dragBoxIndex by remember {
                 mutableIntStateOf(0)
             }
-
             repeat(boxCount) { index ->
                 Box(
                     modifier = Modifier
@@ -86,8 +88,20 @@ fun DragAndDropBoxes(modifier: Modifier = Modifier) {
                             target = remember {
                                 object : DragAndDropTarget {
                                     override fun onDrop(event: DragAndDropEvent): Boolean {
-                                        isPlaying = !isPlaying
                                         dragBoxIndex = index
+
+                                        //my solution todo9: enable different animation based on which box receives the drop
+                                        // 0,1 = "up" (negative Y), 2,3 = "down" (positive Y)
+                                        targetOffset = when (index) {
+                                            0 -> IntOffset(-150, -150)  // up-left
+                                            1 -> IntOffset(150, -150)   // up-right
+                                            2 -> IntOffset(-150, 150)   // down-left
+                                            else -> IntOffset(150, 150) // down-right
+                                        }
+                                        // Up boxes rotate clockwise, down boxes rotate counter-clockwise
+                                        rotationDirection = if (index <= 1) 1f else -1f
+                                        isPlaying = true
+
                                         return true
                                     }
                                 }
@@ -100,51 +114,52 @@ fun DragAndDropBoxes(modifier: Modifier = Modifier) {
                         enter = scaleIn() + fadeIn(),
                         exit = scaleOut() + fadeOut()
                     ) {
-                        Text(
-                            text = "Right",
-                            fontSize = 40.sp,
-                            color = Color.Red,
-                            fontWeight = FontWeight.Bold,
-
+                        //my solution todo4: replace "Right" text with an icon/image as the drag source
+                        Icon(
+                            imageVector = Icons.Default.Face,
+                            contentDescription = "Drag source icon",
+                            tint = Color.Red,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .dragAndDropSource {
-                                    detectTapGestures(
-                                        onLongPress = { offset ->
-                                            startTransfer(
-                                                transferData = DragAndDropTransferData(
-                                                    clipData = ClipData.newPlainText(
-                                                        "text",
-                                                        ""
+                                .dragAndDropSource(
+                                    block = {
+                                        detectTapGestures(
+                                            onLongPress = {
+                                                startTransfer(
+                                                    transferData = DragAndDropTransferData(
+                                                        clipData = ClipData.newPlainText(
+                                                            "text",
+                                                            ""
+                                                        )
                                                     )
                                                 )
-                                            )
-                                        }
-                                    )
-                                }
+                                            }
+                                        )
+                                    }
+                                )
                         )
                     }
                 }
             }
         }
-
-
+        //my solution todo7: animate the rect’s position horizontally and vertically
         val pOffset by animateIntOffsetAsState(
-            targetValue = when (isPlaying) {
-                true -> IntOffset(130, 300)
-                false -> IntOffset(130, 100)
-            },
+            targetValue = targetOffset,
             animationSpec = tween(3000, easing = LinearEasing)
         )
-
+        //my solution todo6: rotate the rect around itself, direction depends on drop (up/down)
         val rtatView by animateFloatAsState(
-            targetValue = if (isPlaying) 360f else 0.0f,
-            // Configure the animation duration and easing.
-            animationSpec = repeatable(
-                iterations = if (isPlaying) 10 else 1,
-                tween(durationMillis = 3000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            )
+            targetValue = if (isPlaying) 360f * rotationDirection else 0.0f,
+            animationSpec = if (isPlaying) {
+                repeatable(
+                    iterations = 10,
+                    animation = tween(durationMillis = 3000, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                )
+            } else {
+                // when resetting, snap back to 0° without spinning
+                tween(durationMillis = 0)
+            }
         )
         Box(
             modifier = Modifier
@@ -152,15 +167,36 @@ fun DragAndDropBoxes(modifier: Modifier = Modifier) {
                 .weight(0.8f)
                 .background(Color.Red)
         ) {
-            Icon(
-                imageVector = Icons.Default.Face,
-                contentDescription = "Face",
+            //my solution todo8: button to reset the rect back to the center of the screen
+            Button(
+                onClick = {
+                    targetOffset = IntOffset(0, 0)
+                    isPlaying = false
+                    rotationDirection = 1f
+                },
                 modifier = Modifier
-                    .padding(10.dp)
-                    .offset(pOffset.x.dp, pOffset.y.dp)
-                    .rotate(rtatView)
-            )
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+            ) {
+                Text(text = "Reset")
+            }
+
+            //my solution todo3: change the moving "circle" into a rectangle
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        // offset relative to the center of the screen
+                        .offset(pOffset.x.dp, pOffset.y.dp)
+                        .rotate(rtatView)
+                        .size(width = 120.dp, height = 80.dp)
+                        .background(Color.Yellow)
+                        .border(2.dp, Color.Black)
+                )
+            }
         }
     }
 }
-
